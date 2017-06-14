@@ -160,5 +160,5 @@ class BloomFilter(object):
         hash_1 = FNVHash(key)
         hash_2 = APHash(key)
 
-        for i in range(self.k):
-            yield (hash_1 + i * hash_2) % self.n
+        for i in range(self._hashes_count):
+            yield (hash_1 + i * hash_2) % self._bits_count
