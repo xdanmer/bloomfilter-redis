@@ -1,10 +1,13 @@
-=================
-bloomfilter-redis
-=================
+=========================
+bloomfilter-redis asincio
+=========================
 
 Standard & time series bloom filters, backed by Redis bit vectors.
 
-This implementation is Python-only. If you're looking for (way) more speed, check out a C-based extension that uses hiredis at https://github.com/seomoz/pyreBloom
+This is Python 3 asyncio implementation.
+
+Performant Python 2 C-based extension that uses hiredis at https://github.com/seomoz/pyreBloom
+
 
 Overview
 ========
@@ -29,24 +32,3 @@ The finest resolutions possible are around 1ms. If you're pushing it to this lim
 have to take care of a bunch of things: Storing to and retrieving from Redis takes some
 time. Timestamps aren't all that exact, especially when running on a virtual machine. If
 you're using multiple machines, their clocks have to be perfectly in sync.
-
-Quick Benchmarks
-================
-
-Quick benchmark for ballpark figures on a MacbookPro (2x 2.66GHz) with Python 2.7,
-hiredis and Redis 2.9 (unstable). Each benchmark was run with k=4 hashes per key. Keys
-are random strings of 10 chars length:
-
-Big filter with fewer values:
-filling bloom filter of 1024.00kB size with 10k values
-adding 10000 values took 2.09s (4790 values/sec, 208.73 us/value)
-correct: 100000 / false: 0 -> 0% false positives
-
-Small filter with a lot of values:
-filling bloom filter of 500.00kB size with 100k values
-adding 100000 values took 22.30s (4485 values/sec, 222.96 us/value)
-correct: 100000 / false: 3 -> 0.003% false positives
-
-4 parallel Python processes:
-filling bloom filter of 1024.00kB size with 2M values
-adding 2000000 values took 214.69s (9316 values/sec, 429.38 us/value)
