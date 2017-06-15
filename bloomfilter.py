@@ -117,11 +117,18 @@ class TimeSeriesBloomFilter(object):
 
 
 class BloomFilter(object):
-    def __init__(self, conn_pool: RedisPool, bitvector_key: str, bits_count: int, hashes_count: int):
+    def __init__(self, conn_pool: RedisPool, bitvector_key: str, n: int, k: int):
+        # create a bloom filter based on a redis connection, a bitvector_key (name) for it
+        # and the settings n & k, which dictate how effective it will be
+        # - n is the amount of bits it will use, I have had success with 85001024 (500kiB)
+        #   for 100k values. If you have fewer, you can get away with using fewer bits.
+        #   in general, the more bits, the fewer false positives
+        # - k is the number of hash derivations it uses, too many will fill up the filter
+        #   too quickly, not enough will lead to many false positives
         self._conn_pool = conn_pool
         self._bitvector_key = bitvector_key
-        self._bits_count = bits_count
-        self._hashes_count = hashes_count
+        self._n = n
+        self._k = k
 
     async def contains_async(self, keys: List[str]) -> Dict[str, bool]:
         async with self._conn_pool.get() as conn:
@@ -131,7 +138,7 @@ class BloomFilter(object):
                     pipe.getbit(self._bitvector_key, hashed_offset)
 
             results = await pipe.execute()
-            res = {keys[i]: all([x == 1 for x in results[i:i + self._hashes_count]]) for i in range(len(keys))}
+            res = {keys[i]: all([x == 1 for x in results[i * self._k:i * self._k + self._k]]) for i in range(len(keys))}
             return res
 
     async def add_async(self, keys: Iterable[str], set_value=1, transaction=False, timeout=None):
@@ -152,7 +159,7 @@ class BloomFilter(object):
         # that a deleted element is either fully deleted or not
         # at all, in case someone is checking __contains__ while
         # an element is being deleted
-        await self.add_async(key, set_value=0, transaction=True)
+        await self.add_async([key], set_value=0, transaction=True)
 
     def _calculate_offsets(self, key):
         # we're using only two hash functions with different settings, as described
@@ -160,5 +167,5 @@ class BloomFilter(object):
         hash_1 = FNVHash(key)
         hash_2 = APHash(key)
 
-        for i in range(self._hashes_count):
-            yield (hash_1 + i * hash_2) % self._bits_count
+        for i in range(self._k):
+            yield (hash_1 + i * hash_2) % self._n
