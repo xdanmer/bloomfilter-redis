@@ -22,8 +22,8 @@ async def create_single(request):
     conn_pool = await create_redis()
     single = BloomFilter(conn_pool=conn_pool,
                          bitvector_key='test_bloomfilter',
-                         bits_count=1024*8,
-                         hashes_count=4)
+                         n=1024 * 8,
+                         k=4)
 
     request.addfinalizer(conn_pool.close)
     return single
@@ -33,7 +33,7 @@ async def create_time_series(request):
     conn_pool = await create_redis()
     timeseries = TimeSeriesBloomFilter(conn_pool=conn_pool,
                                        bitvector_key='test_timed_bloomfilter',
-                                       capacity=100000,
+                                       capacity=1000,
                                        error_rate=0.01,
                                        time_resolution=timedelta(microseconds=1000),
                                        time_limit=timedelta(microseconds=10000))
@@ -55,7 +55,7 @@ async def test_add(request):
                        'nine',
                        'ten'])
     # test membership operations
-    res = await f.contains_async(['ten', 'five', 'two', 'eleven'])
+    res = await f.contains_async(['ten', 'two', 'five', 'eleven'])
 
     assert res['ten']
     assert res['five']
@@ -95,9 +95,9 @@ async def test_timeseries_delay(request):
     await f.add_async(['test_value'])
     start = datetime.now()
     # allow for 3ms delay in storing/timer resolution
-    delay = timedelta(microseconds=3000)
+    delay = timedelta(seconds=3)
 
     # make sure that the filter doesn't say that test_value is in the filter for too long
     while (await f.contains_async(['test_value']))['test_value']:
-        assert datetime.now() < (start + timedelta(microseconds=10000) + delay)
-    assert not (f.contains_async(['test_value']))['test_value']
+        assert datetime.now() < (start + timedelta(seconds=10) + delay)
+    assert not (await f.contains_async(['test_value']))['test_value']
