@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import aioredis
 import pytest
 
-from bloomfilter import BloomFilter, TimeSeriesBloomFilter
+from bloomfilterredis.bloomfilter import BloomFilter, TimeSeriesBloomFilter
 
 
 @pytest.fixture()
