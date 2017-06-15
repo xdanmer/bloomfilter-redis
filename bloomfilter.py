@@ -1,11 +1,8 @@
 import asyncio
 import math
 import time
-
 from datetime import datetime, timedelta
 from typing import List, Dict, Iterable
-
-import aioredis
 
 # For hash functions see http://www.partow.net/programming/hashfunctions/index.html
 # Author Arash Partow, CPL http://www.opensource.org/licenses/cpl1.0.php
@@ -52,9 +49,6 @@ class TimeSeriesBloomFilter(object):
         self._hashes_count = math.ceil(self._bits_count / capacity * math.log(2))
         self._conn_pool = conn_pool
 
-    async def connect_async(self, host: str, port: int, db: int):
-        self._conn_pool = await aioredis.create_pool((host, port), db=db, maxsize=20)
-
     def _most_current_filters(self, within, now):
         resolution_microseconds = (self._time_resolution.days * 86400 + self._time_resolution.seconds) * 1e6 + \
                                   self._time_resolution.microseconds
@@ -81,6 +75,7 @@ class TimeSeriesBloomFilter(object):
         now = kwargs.get('now', datetime.now())
 
         futures = []
+        # add to the current bloom filter
         for bloom_filter in self._most_current_filters(within=within, now=now):
             # we'll expire the bloom filter we're setting to after 'limit' + 1 seconds
             future = bloom_filter.add_async(keys, timeout=self._time_limit_seconds + 1)
@@ -95,7 +90,7 @@ class TimeSeriesBloomFilter(object):
         # delete from the time series bloomfilters
         for bloom_filter in self._most_current_filters(within=within, now=now):
             # in case of creating new filter when deleting, so check first
-            if key in bloom_filter:
+            if (await bloom_filter.contains_async([key]))[key]:
                 await bloom_filter.delete_async(key)
 
     async def contains_async(self, keys: List[str], **kwargs) -> Dict[str, bool]:
@@ -142,6 +137,9 @@ class BloomFilter(object):
             return res
 
     async def add_async(self, keys: Iterable[str], set_value=1, transaction=False, timeout=None):
+        # set bits for every hash to 1
+        # sometimes we can use pipelines here instead of MULTI,
+        # which makes it a bit faster
         async with self._conn_pool.get() as conn:
             pipe = conn.multi_exec() if transaction else conn.pipeline()
             for key in keys:
@@ -157,7 +155,7 @@ class BloomFilter(object):
         # delete is just an add with value 0
         # make sure the pipeline gets wrapped in MULTI/EXEC, so
         # that a deleted element is either fully deleted or not
-        # at all, in case someone is checking __contains__ while
+        # at all, in case someone is checking 'contains' while
         # an element is being deleted
         await self.add_async([key], set_value=0, transaction=True)
 
