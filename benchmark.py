@@ -2,9 +2,9 @@ import asyncio
 import random
 from datetime import datetime, timedelta
 
-from redis import StrictRedis
+import aioredis
 
-from bloomfilter import TimeSeriesBloomFilter
+from bloomfilterredis.bloomfilter import TimeSeriesBloomFilter
 
 test_amount = 1000 * 10
 capacity = 24000000
@@ -16,16 +16,17 @@ db = 0
 
 
 async def main():
-    r = StrictRedis(host=host, port=port, db=db)
-    r.flushdb()
+    conn_pool = await aioredis.create_pool((host, port), db=db, maxsize=20)
+    async with conn_pool.get() as conn:
+        conn.flushdb()
 
     bloom = TimeSeriesBloomFilter(bitvector_key='bloom',
                                   capacity=capacity,
                                   error_rate=0.01,
                                   time_limit=timedelta(days=3),
-                                  time_resolution=timedelta(hours=36))
+                                  time_resolution=timedelta(hours=36),
+                                  conn_pool=conn_pool)
 
-    await bloom.connect_async(host=host, port=port, db=db)
 
     print("filling bloom filter of %.2fkB size with %.1fk values" % \
           (bloom._bits_count / 1024.0 / 8, test_amount / 1000.0))
@@ -85,7 +86,8 @@ async def main():
     print("correct: %s / false: %s -> %.4f%% false positives" % \
           (correct_responses, false_positives, 100 * false_positives / float(correct_responses)))
 
-    r.flushdb()
+    async with conn_pool.get() as conn:
+        conn.flushdb()
 
 
 loop = asyncio.get_event_loop_policy().new_event_loop()
