@@ -1,5 +1,5 @@
 =========================
-bloomfilter-redis asincio
+bloomfilter-redis asyncio
 =========================
 
 Standard & time series bloom filters, backed by Redis bit vectors.
